@@ -5,12 +5,25 @@ import { GovHeader } from "@/components/GovHeader";
 
 export default function VoteReceipt() {
   const nav = useNavigate();
-  const receipt = sessionStorage.getItem("voteReceipt") || "—";
-  const ts = new Date().toLocaleString("en-GB");
+  const referenceNo = sessionStorage.getItem("voteReferenceNo");
+  const timestampRaw = sessionStorage.getItem("voteTimestamp");
+  const votedPartyName = sessionStorage.getItem("votedPartyName");
 
+  // If someone lands here without having cast a vote in this session,
+  // send them back to the ballot instead of showing an empty receipt.
   useEffect(() => {
-    sessionStorage.setItem("hasVoted", "1");
-  }, []);
+    if (!referenceNo) {
+      nav("/vote", { replace: true });
+    }
+  }, [referenceNo, nav]);
+
+  if (!referenceNo) {
+    return null;
+  }
+
+  const ts = timestampRaw
+    ? new Date(timestampRaw).toLocaleString("en-GB")
+    : new Date().toLocaleString("en-GB");
 
   return (
     <div className="min-h-screen bg-background">
@@ -24,11 +37,12 @@ export default function VoteReceipt() {
           <p className="text-lg">
             Your reference number
             <br />
-            <strong className="text-2xl font-bold">{receipt}</strong>
+            <strong className="text-2xl font-bold">{referenceNo}</strong>
           </p>
         </div>
         <p className="text-lg mb-4">
-          Your vote has been securely recorded against your verified account.
+          Your vote{votedPartyName ? ` for ${votedPartyName}` : ""} has been
+          securely recorded against your verified identity.
         </p>
         <p className="mb-6">
           <span className="text-muted-foreground">Timestamp:</span>{" "}
@@ -37,24 +51,13 @@ export default function VoteReceipt() {
 
         <h2 className="text-2xl font-bold mb-3">What happens next</h2>
         <p className="mb-6">
-          Results will be published after polls close. You can view live results
-          once available.
+          Keep your reference number for your records. Results will be
+          published after polls close.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button
-            size="lg"
-            onClick={() => {
-              sessionStorage.setItem("hasVoted", "1");
-              nav("/admin");
-            }}
-          >
-            View results
-          </Button>
-          <Button variant="outline" size="lg" onClick={() => nav("/")}>
-            Back to home
-          </Button>
-        </div>
+        <Button size="lg" variant="outline" onClick={() => nav("/")}>
+          Back to home
+        </Button>
       </main>
     </div>
   );

@@ -13,13 +13,13 @@ function Index() {
             Vote in the UK general election
           </h1>
           <p className="text-xl text-foreground">
-            Use this service to cast your vote securely. Sign in with your email
-            and password — one of the official ways to vote in the UK.
+            Use this service to cast your vote securely — one of the official
+            ways to vote in the UK.
           </p>
           <p>It takes around 2 minutes.</p>
 
           <Button size="lg" asChild className="text-lg px-6 py-4 h-auto">
-            <Link to="/verify">
+            <Link to="/vote">
               Start now
               <svg
                 className="ml-2"
@@ -37,10 +37,8 @@ function Index() {
             <h2 className="text-2xl font-bold">Before you start</h2>
             <p>You'll need:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>your poll card reference</li>
               <li>your National Insurance number</li>
-              <li>your registered home address</li>
-              <li>your date of birth</li>
+              <li>your last name, as shown on the electoral register</li>
             </ul>
           </div>
         </div>
