@@ -57,10 +57,7 @@ api.interceptors.response.use(
     const body = error.response?.data;
 
     const message =
-      body?.error?.details ||
-      body?.detail ||
-      error.message ||
-      "Something went wrong";
+      body?.error?.details || body?.detail || error.message || "Something went wrong";
 
     return Promise.reject(new ApiError(message, status, body?.error?.code));
   },
