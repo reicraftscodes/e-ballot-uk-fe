@@ -3,11 +3,9 @@ import { useNavigate } from "react-router-dom";
 
 import { votingService, ApiError, type PartyListDto } from "@/config/apiConfig";
 
-import { GovHeader } from "@/components/GovHeader";
-import { toast } from "sonner";
+import { GovFooter } from "@/components/GovFooter";
 
 import { VOTE_IDENTITY_STORAGE_KEY } from "./Vote";
-import { GovFooter } from "@/components/GovFooter";
 
 interface VoteIdentity {
   pollCardReference: string;
@@ -42,7 +40,10 @@ export default function VoteBallot() {
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // -------------------------------------------------------------------
   // Load verified identity from sessionStorage
+  // -------------------------------------------------------------------
+
   useEffect(() => {
     const raw = sessionStorage.getItem(VOTE_IDENTITY_STORAGE_KEY);
 
@@ -56,14 +57,17 @@ export default function VoteBallot() {
       setIdentity(parsed);
     } catch {
       sessionStorage.removeItem(VOTE_IDENTITY_STORAGE_KEY);
-
       nav("/vote", { replace: true });
     }
   }, [nav]);
 
+  // -------------------------------------------------------------------
   // Load parties
+  // -------------------------------------------------------------------
+
   const loadParties = async () => {
     setPartiesState({ status: "loading" });
+    setSubmitError(null);
 
     try {
       const { data } = await votingService.getParties();
@@ -83,16 +87,22 @@ export default function VoteBallot() {
     }
   }, [identity]);
 
+  // -------------------------------------------------------------------
   // Selected party
+  // -------------------------------------------------------------------
+
   const selectedParty =
     partiesState.status === "ready"
       ? partiesState.parties.find((party) => party.id === selectedPartyId)
       : undefined;
 
+  // -------------------------------------------------------------------
   // Open confirmation
+  // -------------------------------------------------------------------
+
   const openConfirm = () => {
     if (!selectedPartyId) {
-      toast.error("Select a party to continue");
+      setSubmitError("Select a party to continue.");
       return;
     }
 
@@ -100,7 +110,10 @@ export default function VoteBallot() {
     setConfirmOpen(true);
   };
 
+  // -------------------------------------------------------------------
   // Cast vote
+  // -------------------------------------------------------------------
+
   const cast = async () => {
     if (!identity || !selectedPartyId) {
       return;
@@ -116,12 +129,11 @@ export default function VoteBallot() {
         partyId: selectedPartyId,
       });
 
+      // The vote has successfully been accepted by the backend.
       sessionStorage.removeItem(VOTE_IDENTITY_STORAGE_KEY);
 
       sessionStorage.setItem("voteReferenceNo", data.referenceNo);
-
       sessionStorage.setItem("voteTimestamp", data.timestamp);
-
       sessionStorage.setItem("votedPartyName", selectedParty?.partyName ?? "");
 
       nav("/vote/receipt");
@@ -138,32 +150,35 @@ export default function VoteBallot() {
       } else if (err.status === 404) {
         message = "That party could not be found. Refresh and try again.";
       } else if (err.status === 409) {
-        // The backend is authoritative for duplicate votes.
         message = "A vote has already been cast for this voter.";
       }
+
       setSubmitError(message);
       setConfirmOpen(false);
-
-      toast.error(message);
     } finally {
       setBusy(false);
     }
   };
 
+  // -------------------------------------------------------------------
   // Identity loading
+  // -------------------------------------------------------------------
+
   if (!identity) {
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-white text-[#0b0c0c]">
-      <GovHeader />
-
+    <div className="min-h-screen bg-white">
       <main
         id="main-content"
         className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"
       >
         <div className="max-w-2xl">
+          {/* --------------------------------------------------------- */}
+          {/* Back                                                       */}
+          {/* --------------------------------------------------------- */}
+
           <button
             type="button"
             onClick={() => nav("/vote")}
@@ -189,6 +204,10 @@ export default function VoteBallot() {
             Back
           </button>
 
+          {/* --------------------------------------------------------- */}
+          {/* Page heading                                               */}
+          {/* --------------------------------------------------------- */}
+
           <div className="mb-10">
             <p className="mb-2 text-base text-[#505a5f]">Step 3 of 3</p>
 
@@ -201,7 +220,9 @@ export default function VoteBallot() {
             </div>
           </div>
 
-          {/* VERIFIED IDENTITY*/}
+          {/* --------------------------------------------------------- */}
+          {/* Verified identity                                          */}
+          {/* --------------------------------------------------------- */}
 
           <div className="mb-8 border-l-4 border-[#00703c] bg-[#f3f2f1] p-5">
             <p className="mb-1 text-sm font-bold uppercase tracking-wide text-[#505a5f]">
@@ -217,9 +238,14 @@ export default function VoteBallot() {
             </p>
           </div>
 
+          {/* --------------------------------------------------------- */}
+          {/* Single error box                                           */}
+          {/* --------------------------------------------------------- */}
+
           {submitError && (
             <div
               role="alert"
+              aria-live="polite"
               className="
                 mb-8
                 border-l-4
@@ -234,7 +260,10 @@ export default function VoteBallot() {
             </div>
           )}
 
-          {/* BALLOT*/}
+          {/* --------------------------------------------------------- */}
+          {/* Ballot                                                     */}
+          {/* --------------------------------------------------------- */}
+
           <section aria-labelledby="choose-party-heading">
             <h2 id="choose-party-heading" className="mb-3 text-2xl font-bold">
               Choose a party
@@ -245,10 +274,18 @@ export default function VoteBallot() {
               submitted.
             </p>
 
-            {/* Loading */}
+            {/* ------------------------------------------------------- */}
+            {/* Loading                                                  */}
+            {/* ------------------------------------------------------- */}
+
             {partiesState.status === "loading" && (
               <div
-                className="border-l-4 border-[#1d70b8] bg-[#f3f2f1] p-5"
+                className="
+                  border-l-4
+                  border-[#1d70b8]
+                  bg-[#f3f2f1]
+                  p-5
+                "
                 role="status"
                 aria-live="polite"
               >
@@ -260,7 +297,10 @@ export default function VoteBallot() {
               </div>
             )}
 
-            {/* Error */}
+            {/* ------------------------------------------------------- */}
+            {/* Error loading parties                                    */}
+            {/* ------------------------------------------------------- */}
+
             {partiesState.status === "error" && (
               <div
                 role="alert"
@@ -307,7 +347,9 @@ export default function VoteBallot() {
               </div>
             )}
 
-            {/* No parties */}
+            {/* ------------------------------------------------------- */}
+            {/* No parties                                               */}
+            {/* ------------------------------------------------------- */}
 
             {partiesState.status === "ready" &&
               partiesState.parties.length === 0 && (
@@ -320,7 +362,9 @@ export default function VoteBallot() {
                 </div>
               )}
 
-            {/* Party list */}
+            {/* ------------------------------------------------------- */}
+            {/* Party list                                               */}
+            {/* ------------------------------------------------------- */}
 
             {partiesState.status === "ready" &&
               partiesState.parties.length > 0 && (
@@ -389,13 +433,16 @@ export default function VoteBallot() {
                 </fieldset>
               )}
 
-            {/* SELECTED PARTY SUMMARY */}
+            {/* ------------------------------------------------------- */}
+            {/* Selected party summary                                   */}
+            {/* ------------------------------------------------------- */}
 
             {selectedParty && (
               <div className="mt-8 border-l-4 border-[#1d70b8] bg-[#f3f2f1] p-5">
                 <p className="text-sm font-bold uppercase tracking-wide text-[#505a5f]">
                   Your selection
                 </p>
+
                 <p className="mt-1 text-xl font-bold">
                   {selectedParty.partyName}
                 </p>
@@ -408,7 +455,10 @@ export default function VoteBallot() {
               </div>
             )}
 
-            {/* REVIEW BUTTON */}
+            {/* ------------------------------------------------------- */}
+            {/* Review button                                            */}
+            {/* ------------------------------------------------------- */}
+
             {partiesState.status === "ready" &&
               partiesState.parties.length > 0 && (
                 <div className="mt-10">
@@ -449,7 +499,10 @@ export default function VoteBallot() {
         </div>
       </main>
 
-      {/* CONFIRMATION */}
+      {/* ------------------------------------------------------------- */}
+      {/* Confirmation dialog                                           */}
+      {/* ------------------------------------------------------------- */}
+
       {confirmOpen && (
         <div
           className="
@@ -553,6 +606,7 @@ export default function VoteBallot() {
           </div>
         </div>
       )}
+
       <GovFooter />
     </div>
   );
