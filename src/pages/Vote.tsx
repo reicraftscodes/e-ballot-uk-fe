@@ -27,7 +27,59 @@ const step1Schema = z.object({
 // Step 2: last name + date of birth
 const step2Schema = z.object({
   lastName: z.string().trim().min(1, "Enter your last name"),
-  dob: z.string().min(1, "Enter your date of birth"),
+
+  dob: z
+    .string()
+    .min(1, "Enter your date of birth")
+    .refine(
+      (value) => {
+        // Native <input type="date"> returns YYYY-MM-DD
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+        if (!match) {
+          return false;
+        }
+
+        const [, year, month, day] = match;
+
+        const yearNumber = Number(year);
+        const monthNumber = Number(month);
+        const dayNumber = Number(day);
+
+        // Year must be exactly 4 digits
+        if (year.length !== 4) {
+          return false;
+        }
+
+        // Prevent impossible/future years
+        const currentYear = new Date().getFullYear();
+
+        if (yearNumber < 1900 || yearNumber > currentYear) {
+          return false;
+        }
+
+        // Check that the date actually exists
+        const date = new Date(yearNumber, monthNumber - 1, dayNumber);
+
+        if (
+          date.getFullYear() !== yearNumber ||
+          date.getMonth() !== monthNumber - 1 ||
+          date.getDate() !== dayNumber
+        ) {
+          return false;
+        }
+
+        // Date must be in the past
+        if (date >= new Date()) {
+          return false;
+        }
+
+        return true;
+      },
+      {
+        message: "Enter a valid date of birth",
+      },
+    ),
 });
 
 type Step = "pollcard-ni" | "identity" | "checking" | "confirmed";
