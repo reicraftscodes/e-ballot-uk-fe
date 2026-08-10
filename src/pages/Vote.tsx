@@ -1,23 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+
 import { GovHeader } from "@/components/GovHeader";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-} from "lucide-react";
 
 export const VOTE_IDENTITY_STORAGE_KEY = "eballot_vote_identity";
 
@@ -25,9 +10,7 @@ function normaliseNi(value: string) {
   return value.replace(/\s+/g, "").toUpperCase();
 }
 
-// -----------------------------------------------------------------------
 // Step 1: poll card reference + National Insurance number
-// -----------------------------------------------------------------------
 const step1Schema = z.object({
   pollCardReference: z.string().trim().min(4, "Enter your poll card reference"),
 
@@ -41,12 +24,62 @@ const step1Schema = z.object({
     ),
 });
 
-// -----------------------------------------------------------------------
 // Step 2: last name + date of birth
-// -----------------------------------------------------------------------
 const step2Schema = z.object({
   lastName: z.string().trim().min(1, "Enter your last name"),
-  dob: z.string().min(1, "Enter your date of birth"),
+
+  dob: z
+    .string()
+    .min(1, "Enter your date of birth")
+    .refine(
+      (value) => {
+        // Native <input type="date"> returns YYYY-MM-DD
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+        if (!match) {
+          return false;
+        }
+
+        const [, year, month, day] = match;
+
+        const yearNumber = Number(year);
+        const monthNumber = Number(month);
+        const dayNumber = Number(day);
+
+        // Year must be exactly 4 digits
+        if (year.length !== 4) {
+          return false;
+        }
+
+        // Prevent impossible/future years
+        const currentYear = new Date().getFullYear();
+
+        if (yearNumber < 1900 || yearNumber > currentYear) {
+          return false;
+        }
+
+        // Check that the date actually exists
+        const date = new Date(yearNumber, monthNumber - 1, dayNumber);
+
+        if (
+          date.getFullYear() !== yearNumber ||
+          date.getMonth() !== monthNumber - 1 ||
+          date.getDate() !== dayNumber
+        ) {
+          return false;
+        }
+
+        // Date must be in the past
+        if (date >= new Date()) {
+          return false;
+        }
+
+        return true;
+      },
+      {
+        message: "Enter a valid date of birth",
+      },
+    ),
 });
 
 type Step = "pollcard-ni" | "identity" | "checking" | "confirmed";
@@ -63,12 +96,10 @@ export default function Vote() {
   const [dob, setDob] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const [alreadyVoted, setAlreadyVoted] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
 
-  // ---------------------------------------------------------------------
-  // Step 1
-  // ---------------------------------------------------------------------
   const submitStep1 = () => {
     const parsed = step1Schema.safeParse({
       pollCardReference,
@@ -89,13 +120,9 @@ export default function Vote() {
     setFieldErrors({});
     setAlreadyVoted(false);
 
-    // Duplicate-vote checking should happen on the backend.
     setStep("identity");
   };
 
-  // ---------------------------------------------------------------------
-  // Step 2
-  // ---------------------------------------------------------------------
   const submitStep2 = () => {
     const parsed = step2Schema.safeParse({
       lastName,
@@ -117,9 +144,7 @@ export default function Vote() {
     runIdentityCheck();
   };
 
-  // ---------------------------------------------------------------------
   // Identity confirmation
-  // ---------------------------------------------------------------------
   const runIdentityCheck = () => {
     setStep("checking");
     setCheckFailed(false);
@@ -139,9 +164,7 @@ export default function Vote() {
     }, 900);
   };
 
-  // ---------------------------------------------------------------------
   // Save identity and continue to ballot
-  // ---------------------------------------------------------------------
   const goToBallot = () => {
     sessionStorage.setItem(
       VOTE_IDENTITY_STORAGE_KEY,
@@ -156,9 +179,19 @@ export default function Vote() {
     nav("/vote/ballot");
   };
 
-  // ---------------------------------------------------------------------
+  // Back navigation
+  const goBack = () => {
+    if (step === "pollcard-ni") {
+      nav("/");
+      return;
+    }
+
+    setStep("pollcard-ni");
+    setFieldErrors({});
+    setCheckFailed(false);
+  };
+
   // Progress
-  // ---------------------------------------------------------------------
   const progress =
     step === "pollcard-ni"
       ? 1
@@ -167,292 +200,643 @@ export default function Vote() {
         : 3;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white text-[#0b0c0c]">
       <GovHeader />
 
-      {/* --------------------------------------------------------------- */}
-      {/* Back button                                                     */}
-      {/* --------------------------------------------------------------- */}
-      <div className="max-w-2xl mx-auto px-4 pt-6">
-        <button
-          onClick={() =>
-            step === "pollcard-ni" ? nav("/") : setStep("pollcard-ni")
-          }
-          className="text-accent underline text-base"
-        >
-          ‹ Back
-        </button>
-      </div>
+      <main
+        id="main-content"
+        className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"
+      >
+        <div className="max-w-2xl">
+          <button
+            type="button"
+            onClick={goBack}
+            className="
+              mb-10
+              inline-flex
+              items-center
+              text-base
+              font-medium
+              text-[#1d70b8]
+              underline
+              decoration-2
+              underline-offset-2
+              hover:text-[#003078]
+              focus:outline-none
+              focus:ring-4
+              focus:ring-[#ffdd00]
+            "
+          >
+            <span aria-hidden="true" className="mr-2 text-xl leading-none">
+              ‹
+            </span>
+            Back
+          </button>
 
-      <main className="max-w-2xl mx-auto px-4 py-10 space-y-8">
-        {/* ------------------------------------------------------------- */}
-        {/* Header                                                        */}
-        {/* ------------------------------------------------------------- */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
-            <ShieldCheck className="w-7 h-7 text-primary" />
+          <div className="mb-10">
+            <p className="mb-2 text-base text-[#505a5f]">
+              Step {progress} of 3
+            </p>
+
+            <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+              Vote in the UK general election
+            </h1>
           </div>
 
-          <h1 className="text-3xl font-bold">
-            Vote in the UK general election
-          </h1>
-
-          <p className="text-muted-foreground mt-2">Step {progress} of 3</p>
-
-          <div className="h-2 bg-secondary rounded-full overflow-hidden mt-3 max-w-xs mx-auto">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{
-                width: `${(progress / 3) * 100}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ------------------------------------------------------------- */}
-        {/* Already voted                                                  */}
-        {/* ------------------------------------------------------------- */}
-        {alreadyVoted && (
-          <Card className="border-destructive/40 bg-destructive/5">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-
-                <div>
-                  <p className="font-semibold text-foreground">
-                    You have already voted
-                  </p>
-
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Our records show that a vote has already been cast for this
-                    voter. Each voter may only vote once.
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                className="mt-4 w-full"
-                onClick={() => nav("/")}
+          {/* ALREADY VOTED */}
+          {alreadyVoted && (
+            <section
+              aria-labelledby="already-voted-heading"
+              className="
+                mb-10
+                border-l-4
+                border-[#d4351c]
+                bg-[#f3f2f1]
+                p-6
+              "
+            >
+              <h2
+                id="already-voted-heading"
+                className="mb-3 text-2xl font-bold"
               >
-                ‹ Back
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                You have already voted
+              </h2>
 
-        {/* ------------------------------------------------------------- */}
-        {/* Step 1                                                        */}
-        {/* ------------------------------------------------------------- */}
-        {!alreadyVoted && step === "pollcard-ni" && (
-          <Card className="shadow-[var(--shadow-card)]">
-            <CardHeader>
-              <CardTitle>Poll card details</CardTitle>
+              <p className="mb-6 text-base leading-7">
+                Our records show that a vote has already been cast for this
+                voter. Each voter may only vote once.
+              </p>
 
-              <CardDescription>
-                Enter your electoral identifier and National Insurance number,
-                exactly as shown on your poll card.
-              </CardDescription>
-            </CardHeader>
+              <button
+                type="button"
+                onClick={() => nav("/")}
+                className="
+                  inline-flex
+                  items-center
+                  bg-white
+                  px-5
+                  py-3
+                  text-base
+                  font-bold
+                  text-[#1d70b8]
+                  underline
+                  decoration-2
+                  underline-offset-2
+                  ring-1
+                  ring-[#b1b4b6]
+                  hover:bg-[#f3f2f1]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                Back
+              </button>
+            </section>
+          )}
 
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="pollCard">Poll card reference</Label>
+          {!alreadyVoted && step === "pollcard-ni" && (
+            <section aria-labelledby="step-one-heading">
+              <h2 id="step-one-heading" className="mb-3 text-2xl font-bold">
+                Poll card details
+              </h2>
 
-                <Input
-                  id="pollCard"
-                  placeholder="e.g. PC100001"
-                  value={pollCardReference}
-                  onChange={(e) => setPollCardReference(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submitStep1()}
-                  aria-invalid={!!fieldErrors.pollCardReference}
-                />
+              <p className="mb-8 max-w-xl text-lg leading-7 text-[#505a5f]">
+                Enter your poll card reference and National Insurance number.
+              </p>
 
-                {fieldErrors.pollCardReference && (
-                  <p className="text-sm text-destructive">
-                    {fieldErrors.pollCardReference}
-                  </p>
-                )}
-              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitStep1();
+                }}
+                noValidate
+              >
+                <div className="space-y-8">
+                  {/* Poll card reference */}
+                  <div
+                    className={
+                      fieldErrors.pollCardReference
+                        ? "border-l-4 border-[#d4351c] pl-4"
+                        : ""
+                    }
+                  >
+                    <label
+                      htmlFor="pollCard"
+                      className="mb-2 block text-lg font-bold"
+                    >
+                      Poll card reference
+                    </label>
 
-              <div className="space-y-2">
-                <Label htmlFor="ni">National Insurance number</Label>
+                    {fieldErrors.pollCardReference && (
+                      <p
+                        id="pollCard-error"
+                        className="mb-2 font-bold text-[#d4351c]"
+                      >
+                        <span className="sr-only">Error: </span>
 
-                <Input
-                  id="ni"
-                  placeholder="QQ123456C"
-                  value={nationalInsuranceNumber}
-                  onChange={(e) => setNationalInsuranceNumber(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submitStep1()}
-                  aria-invalid={!!fieldErrors.nationalInsuranceNumber}
-                />
+                        {fieldErrors.pollCardReference}
+                      </p>
+                    )}
 
-                {fieldErrors.nationalInsuranceNumber && (
-                  <p className="text-sm text-destructive">
-                    {fieldErrors.nationalInsuranceNumber}
-                  </p>
-                )}
-              </div>
+                    <input
+                      id="pollCard"
+                      name="pollCardReference"
+                      type="text"
+                      autoComplete="off"
+                      value={pollCardReference}
+                      onChange={(event) =>
+                        setPollCardReference(event.target.value)
+                      }
+                      aria-invalid={
+                        fieldErrors.pollCardReference ? true : undefined
+                      }
+                      aria-describedby={
+                        fieldErrors.pollCardReference
+                          ? "pollCard-error"
+                          : undefined
+                      }
+                      className="
+                        block
+                        w-full
+                        max-w-sm
+                        border-2
+                        border-[#0b0c0c]
+                        bg-white
+                        px-3
+                        py-2
+                        text-lg
+                        outline-none
+                        focus:border-[#0b0c0c]
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    />
+                  </div>
 
-              <Button className="w-full" size="lg" onClick={submitStep1}>
-                Continue
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                  {/* National Insurance number */}
+                  <div
+                    className={
+                      fieldErrors.nationalInsuranceNumber
+                        ? "border-l-4 border-[#d4351c] pl-4"
+                        : ""
+                    }
+                  >
+                    <label
+                      htmlFor="ni"
+                      className="mb-2 block text-lg font-bold"
+                    >
+                      National Insurance number
+                    </label>
 
-        {/* ------------------------------------------------------------- */}
-        {/* Step 2                                                        */}
-        {/* ------------------------------------------------------------- */}
-        {!alreadyVoted && step === "identity" && (
-          <Card className="shadow-[var(--shadow-card)]">
-            <CardHeader>
-              <CardTitle>Confirm your identity</CardTitle>
+                    <p className="mb-2 text-base text-[#505a5f]">
+                      For example, QQ123456C
+                    </p>
 
-              <CardDescription>
+                    {fieldErrors.nationalInsuranceNumber && (
+                      <p
+                        id="ni-error"
+                        className="mb-2 font-bold text-[#d4351c]"
+                      >
+                        <span className="sr-only">Error: </span>
+
+                        {fieldErrors.nationalInsuranceNumber}
+                      </p>
+                    )}
+
+                    <input
+                      id="ni"
+                      name="nationalInsuranceNumber"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={nationalInsuranceNumber}
+                      onChange={(event) =>
+                        setNationalInsuranceNumber(event.target.value)
+                      }
+                      aria-invalid={
+                        fieldErrors.nationalInsuranceNumber ? true : undefined
+                      }
+                      aria-describedby={
+                        fieldErrors.nationalInsuranceNumber
+                          ? "ni-error"
+                          : undefined
+                      }
+                      className="
+                        block
+                        w-full
+                        max-w-xs
+                        border-2
+                        border-[#0b0c0c]
+                        bg-white
+                        px-3
+                        py-2
+                        text-lg
+                        uppercase
+                        outline-none
+                        focus:border-[#0b0c0c]
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    />
+                  </div>
+
+                  {/* Continue */}
+                  <button
+                    type="submit"
+                    className="
+                      inline-flex
+                      items-center
+                      justify-center
+                      bg-[#00703c]
+                      px-6
+                      py-3
+                      text-lg
+                      font-bold
+                      text-white
+                      shadow-[0_2px_0_#00401e]
+                      hover:bg-[#005a30]
+                      focus:outline-none
+                      focus:ring-4
+                      focus:ring-[#ffdd00]
+                    "
+                  >
+                    Continue
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {!alreadyVoted && step === "identity" && (
+            <section aria-labelledby="identity-heading">
+              <h2 id="identity-heading" className="mb-3 text-2xl font-bold">
+                Confirm your identity
+              </h2>
+
+              <p className="mb-8 max-w-xl text-lg leading-7 text-[#505a5f]">
                 Enter your last name and date of birth as shown on the electoral
                 register.
-              </CardDescription>
-            </CardHeader>
+              </p>
 
-            <CardContent className="space-y-4">
+              {/* Verification failure */}
               {checkFailed && (
-                <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-                  <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <div
+                  role="alert"
+                  className="
+                    mb-8
+                    border-l-4
+                    border-[#d4351c]
+                    bg-[#f3f2f1]
+                    p-5
+                  "
+                >
+                  <h3 className="mb-2 text-xl font-bold">There is a problem</h3>
 
-                  <p className="text-sm text-foreground">
+                  <p className="text-base leading-7">
                     We could not confirm those details. Check your last name and
                     date of birth and try again.
                   </p>
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last name</Label>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitStep2();
+                }}
+                noValidate
+              >
+                <div className="space-y-8">
+                  <div
+                    className={
+                      fieldErrors.lastName
+                        ? "border-l-4 border-[#d4351c] pl-4"
+                        : ""
+                    }
+                  >
+                    <label
+                      htmlFor="lastName"
+                      className="mb-2 block text-lg font-bold"
+                    >
+                      Last name
+                    </label>
 
-                <Input
-                  id="lastName"
-                  placeholder="Surname"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submitStep2()}
-                  aria-invalid={!!fieldErrors.lastName}
-                />
+                    {fieldErrors.lastName && (
+                      <p
+                        id="lastName-error"
+                        className="mb-2 font-bold text-[#d4351c]"
+                      >
+                        <span className="sr-only">Error: </span>
 
-                {fieldErrors.lastName && (
-                  <p className="text-sm text-destructive">
-                    {fieldErrors.lastName}
-                  </p>
-                )}
-              </div>
+                        {fieldErrors.lastName}
+                      </p>
+                    )}
 
-              <div className="space-y-2">
-                <Label htmlFor="dob">Date of birth</Label>
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      type="text"
+                      autoComplete="family-name"
+                      value={lastName}
+                      onChange={(event) => setLastName(event.target.value)}
+                      aria-invalid={fieldErrors.lastName ? true : undefined}
+                      aria-describedby={
+                        fieldErrors.lastName ? "lastName-error" : undefined
+                      }
+                      className="
+                        block
+                        w-full
+                        max-w-sm
+                        border-2
+                        border-[#0b0c0c]
+                        bg-white
+                        px-3
+                        py-2
+                        text-lg
+                        outline-none
+                        focus:border-[#0b0c0c]
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    />
+                  </div>
 
-                <Input
-                  id="dob"
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  aria-invalid={!!fieldErrors.dob}
-                />
+                  {/* Date of birth */}
+                  <div
+                    className={
+                      fieldErrors.dob ? "border-l-4 border-[#d4351c] pl-4" : ""
+                    }
+                  >
+                    <label
+                      htmlFor="dob"
+                      className="mb-2 block text-lg font-bold"
+                    >
+                      Date of birth
+                    </label>
 
-                {fieldErrors.dob && (
-                  <p className="text-sm text-destructive">{fieldErrors.dob}</p>
-                )}
-              </div>
+                    <p className="mb-2 text-base text-[#505a5f]">
+                      For example, 27 3 1980
+                    </p>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep("pollcard-ni")}
-                >
-                  Back
-                </Button>
+                    {fieldErrors.dob && (
+                      <p
+                        id="dob-error"
+                        className="mb-2 font-bold text-[#d4351c]"
+                      >
+                        <span className="sr-only">Error: </span>
 
-                <Button className="flex-1" size="lg" onClick={submitStep2}>
-                  Verify identity
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                        {fieldErrors.dob}
+                      </p>
+                    )}
 
-        {/* ------------------------------------------------------------- */}
-        {/* Checking                                                       */}
-        {/* ------------------------------------------------------------- */}
-        {!alreadyVoted && step === "checking" && (
-          <Card className="shadow-[var(--shadow-card)]">
-            <CardContent className="py-12 flex flex-col items-center text-center gap-3">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <input
+                      id="dob"
+                      name="dob"
+                      type="date"
+                      autoComplete="bday"
+                      value={dob}
+                      onChange={(event) => setDob(event.target.value)}
+                      aria-invalid={fieldErrors.dob ? true : undefined}
+                      aria-describedby={
+                        fieldErrors.dob ? "dob-error" : undefined
+                      }
+                      className="
+                        block
+                        border-2
+                        border-[#0b0c0c]
+                        bg-white
+                        px-3
+                        py-2
+                        text-lg
+                        outline-none
+                        focus:border-[#0b0c0c]
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    />
+                  </div>
 
-              <p className="font-semibold text-foreground">
-                Checking your details…
+                  {/* Buttons */}
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                    <button
+                      type="submit"
+                      className="
+                        inline-flex
+                        items-center
+                        justify-center
+                        bg-[#00703c]
+                        px-6
+                        py-3
+                        text-lg
+                        font-bold
+                        text-white
+                        shadow-[0_2px_0_#00401e]
+                        hover:bg-[#005a30]
+                        focus:outline-none
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    >
+                      Verify identity
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("pollcard-ni");
+                        setFieldErrors({});
+                        setCheckFailed(false);
+                      }}
+                      className="
+                        inline-flex
+                        items-center
+                        text-lg
+                        font-bold
+                        text-[#1d70b8]
+                        underline
+                        decoration-2
+                        underline-offset-2
+                        hover:text-[#003078]
+                        focus:outline-none
+                        focus:ring-4
+                        focus:ring-[#ffdd00]
+                      "
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {/* CHECKING*/}
+
+          {!alreadyVoted && step === "checking" && (
+            <section aria-labelledby="checking-heading">
+              <h2 id="checking-heading" className="mb-4 text-3xl font-bold">
+                Checking your details
+              </h2>
+
+              <p className="mb-3 text-lg leading-7">
+                We are checking your details. This may take a moment.
               </p>
 
-              <p className="text-sm text-muted-foreground">
-                This will only take a moment.
+              <p className="text-base text-[#505a5f]">
+                Do not close this page.
               </p>
-            </CardContent>
-          </Card>
-        )}
+            </section>
+          )}
 
-        {/* ------------------------------------------------------------- */}
-        {/* Confirmed                                                      */}
-        {/* ------------------------------------------------------------- */}
-        {!alreadyVoted && step === "confirmed" && (
-          <Card className="shadow-[var(--shadow-card)] border-primary/30">
-            <CardContent className="py-10 flex flex-col items-center text-center gap-3">
-              <CheckCircle2 className="w-10 h-10 text-primary" />
+          {/* CONFIRMED */}
 
-              <p className="text-xl font-bold text-foreground">
-                Identity confirmed
-              </p>
+          {!alreadyVoted && step === "confirmed" && (
+            <section aria-labelledby="confirmed-heading">
+              {/* Confirmation panel */}
+              <div
+                className="
+                  mb-10
+                  border-8
+                  border-[#00703c]
+                  bg-[#00703c]
+                  px-6
+                  py-8
+                  text-white
+                "
+              >
+                <h2 id="confirmed-heading" className="text-3xl font-bold">
+                  Identity confirmed
+                </h2>
+              </div>
 
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-left mt-4 w-full max-w-sm">
-                <div>
-                  <dt className="text-muted-foreground">Poll card reference</dt>
+              <h2 className="mb-6 text-2xl font-bold">Your details</h2>
 
-                  <dd className="font-semibold text-foreground">
-                    {pollCardReference}
-                  </dd>
+              {/* Summary list */}
+              <dl
+                className="
+                  mb-10
+                  divide-y
+                  divide-[#b1b4b6]
+                  border-y
+                  border-[#b1b4b6]
+                "
+              >
+                <div className="grid gap-2 py-5 sm:grid-cols-2">
+                  <dt className="font-bold">Poll card reference</dt>
+
+                  <dd className="break-words">{pollCardReference}</dd>
                 </div>
 
-                <div>
-                  <dt className="text-muted-foreground">NI number</dt>
+                <div className="grid gap-2 py-5 sm:grid-cols-2">
+                  <dt className="font-bold">National Insurance number</dt>
 
-                  <dd className="font-semibold text-foreground">
+                  <dd className="break-words">
                     {normaliseNi(nationalInsuranceNumber)}
                   </dd>
                 </div>
 
-                <div>
-                  <dt className="text-muted-foreground">Last name</dt>
+                <div className="grid gap-2 py-5 sm:grid-cols-2">
+                  <dt className="font-bold">Last name</dt>
 
-                  <dd className="font-semibold text-foreground">{lastName}</dd>
+                  <dd className="break-words">{lastName}</dd>
                 </div>
 
-                <div>
-                  <dt className="text-muted-foreground">Date of birth</dt>
+                <div className="grid gap-2 py-5 sm:grid-cols-2">
+                  <dt className="font-bold">Date of birth</dt>
 
-                  <dd className="font-semibold text-foreground">
-                    {new Date(dob).toLocaleDateString("en-GB")}
-                  </dd>
+                  <dd>{new Date(dob).toLocaleDateString("en-GB")}</dd>
                 </div>
               </dl>
 
-              <Button
-                className="w-full max-w-sm mt-4"
-                size="lg"
+              <p className="mb-6 text-lg leading-7">
+                Your identity has been confirmed. You can now continue to the
+                ballot.
+              </p>
+
+              <button
+                type="button"
                 onClick={goToBallot}
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  bg-[#00703c]
+                  px-6
+                  py-3
+                  text-lg
+                  font-bold
+                  text-white
+                  shadow-[0_2px_0_#00401e]
+                  hover:bg-[#005a30]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
               >
                 Continue to vote
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+              </button>
+            </section>
+          )}
+        </div>
       </main>
+
+      {/* FOOTER */}
+
+      <footer className="mt-16 border-t border-[#b1b4b6] bg-[#f3f2f1]">
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 text-sm text-[#505a5f] sm:flex-row sm:items-center sm:justify-between">
+            <div>© E-Ballot UK</div>
+
+            <nav
+              aria-label="Footer navigation"
+              className="flex flex-wrap gap-x-6 gap-y-2"
+            >
+              <a
+                href="#"
+                className="
+                  text-[#1d70b8]
+                  underline
+                  hover:text-[#003078]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                Help
+              </a>
+
+              <a
+                href="#"
+                className="
+                  text-[#1d70b8]
+                  underline
+                  hover:text-[#003078]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                Accessibility
+              </a>
+
+              <a
+                href="#"
+                className="
+                  text-[#1d70b8]
+                  underline
+                  hover:text-[#003078]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                Privacy
+              </a>
+            </nav>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
