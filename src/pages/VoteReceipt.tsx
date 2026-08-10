@@ -51,13 +51,30 @@ export default function VoteReceipt() {
 
         <h2 className="text-2xl font-bold mb-3">What happens next</h2>
         <p className="mb-6">
-          Keep your reference number for your records. Results will be
-          published after polls close.
+          Keep your reference number for your records. Results will be published
+          after polls close.
         </p>
 
-        <Button size="lg" variant="outline" onClick={() => nav("/")}>
+        <button
+          type="button"
+          onClick={() => nav("/")}
+          className="
+              inline-flex
+              items-center
+              text-lg
+              font-bold
+              text-[#1d70b8]
+              underline
+              decoration-2
+              underline-offset-4
+              hover:text-[#003078]
+              focus:outline-none
+              focus:ring-4
+              focus:ring-[#ffdd00]
+            "
+        >
           Back to home
-        </Button>
+        </button>
       </main>
     </div>
   );

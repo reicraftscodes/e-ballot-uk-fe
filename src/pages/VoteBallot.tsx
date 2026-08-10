@@ -1,115 +1,114 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  votingService,
-  ApiError,
-  type PartyListDto,
-} from "@/config/apiConfig";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+
+import { votingService, ApiError, type PartyListDto } from "@/config/apiConfig";
+
 import { GovHeader } from "@/components/GovHeader";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { VOTE_IDENTITY_STORAGE_KEY } from "./Vote";
 
-const VOTED_NI_STORAGE_KEY = "eballot_voted_ni_numbers";
+import { VOTE_IDENTITY_STORAGE_KEY } from "./Vote";
+import { GovFooter } from "@/components/GovFooter";
 
 interface VoteIdentity {
   pollCardReference: string;
   nationalInsuranceNumber: string;
+  firstName: string;
   lastName: string;
   dob: string;
-}
-
-function rememberVoted(ni: string) {
-  try {
-    const raw = localStorage.getItem(VOTED_NI_STORAGE_KEY);
-    const voted: string[] = raw ? JSON.parse(raw) : [];
-    const next = Array.from(new Set([...voted, ni.toUpperCase()]));
-    localStorage.setItem(VOTED_NI_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Non-critical — the backend's duplicate-vote check is authoritative.
-  }
 }
 
 type PartiesState =
   | { status: "loading" }
   | { status: "error" }
-  | { status: "ready"; parties: PartyListDto[] };
+  | {
+      status: "ready";
+      parties: PartyListDto[];
+    };
 
 export default function VoteBallot() {
   const nav = useNavigate();
 
   const [identity, setIdentity] = useState<VoteIdentity | null>(null);
+
   const [partiesState, setPartiesState] = useState<PartiesState>({
     status: "loading",
   });
+
   const [selectedPartyId, setSelectedPartyId] = useState<number | null>(null);
+
   const [confirmOpen, setConfirmOpen] = useState(false);
+
   const [busy, setBusy] = useState(false);
+
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // This page only makes sense after the verification flow on /vote.
-  // If someone lands here directly (or refreshes and lost the identity
-  // in sessionStorage), send them back to start over.
+  // Load verified identity from sessionStorage
   useEffect(() => {
     const raw = sessionStorage.getItem(VOTE_IDENTITY_STORAGE_KEY);
+
     if (!raw) {
       nav("/vote", { replace: true });
       return;
     }
-    setIdentity(JSON.parse(raw));
+
+    try {
+      const parsed: VoteIdentity = JSON.parse(raw);
+      setIdentity(parsed);
+    } catch {
+      sessionStorage.removeItem(VOTE_IDENTITY_STORAGE_KEY);
+
+      nav("/vote", { replace: true });
+    }
   }, [nav]);
 
+  // Load parties
   const loadParties = async () => {
     setPartiesState({ status: "loading" });
+
     try {
       const { data } = await votingService.getParties();
-      setPartiesState({ status: "ready", parties: data });
+
+      setPartiesState({
+        status: "ready",
+        parties: data,
+      });
     } catch {
       setPartiesState({ status: "error" });
     }
   };
 
   useEffect(() => {
-    if (identity) loadParties();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (identity) {
+      loadParties();
+    }
   }, [identity]);
 
+  // Selected party
   const selectedParty =
     partiesState.status === "ready"
-      ? partiesState.parties.find((p) => p.id === selectedPartyId)
+      ? partiesState.parties.find((party) => party.id === selectedPartyId)
       : undefined;
 
+  // Open confirmation
   const openConfirm = () => {
     if (!selectedPartyId) {
       toast.error("Select a party to continue");
       return;
     }
+
     setSubmitError(null);
     setConfirmOpen(true);
   };
 
+  // Cast vote
   const cast = async () => {
-    if (!identity || !selectedPartyId) return;
+    if (!identity || !selectedPartyId) {
+      return;
+    }
+
     setBusy(true);
     setSubmitError(null);
+
     try {
       const { data } = await votingService.castVote({
         nationalInsuranceNumber: identity.nationalInsuranceNumber,
@@ -117,15 +116,20 @@ export default function VoteBallot() {
         partyId: selectedPartyId,
       });
 
-      rememberVoted(identity.nationalInsuranceNumber);
       sessionStorage.removeItem(VOTE_IDENTITY_STORAGE_KEY);
+
       sessionStorage.setItem("voteReferenceNo", data.referenceNo);
+
       sessionStorage.setItem("voteTimestamp", data.timestamp);
+
       sessionStorage.setItem("votedPartyName", selectedParty?.partyName ?? "");
+
       nav("/vote/receipt");
     } catch (e) {
       const err = e as ApiError;
+
       let message = err.message || "Could not cast your vote. Try again.";
+
       if (err.status === 400) {
         message =
           "We could not match those details against the electoral register. Check your National Insurance number and last name.";
@@ -134,152 +138,422 @@ export default function VoteBallot() {
       } else if (err.status === 404) {
         message = "That party could not be found. Refresh and try again.";
       } else if (err.status === 409) {
-        rememberVoted(identity.nationalInsuranceNumber);
+        // The backend is authoritative for duplicate votes.
         message = "A vote has already been cast for this voter.";
       }
       setSubmitError(message);
       setConfirmOpen(false);
+
       toast.error(message);
     } finally {
       setBusy(false);
     }
   };
 
+  // Identity loading
   if (!identity) {
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white text-[#0b0c0c]">
       <GovHeader />
-      <div className="max-w-2xl mx-auto px-4 pt-6">
-        <button
-          onClick={() => nav("/vote")}
-          className="text-accent underline text-base"
-        >
-          ‹ Back
-        </button>
-      </div>
-      <main className="max-w-2xl mx-auto px-4 py-10">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold">Your ballot</h1>
-          <p className="text-muted-foreground mt-2">
-            Voting as{" "}
-            <span className="font-semibold text-foreground">
-              {identity.lastName}
-            </span>{" "}
-            · NI {identity.nationalInsuranceNumber}
-          </p>
-        </div>
 
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle>Select a party</CardTitle>
-            <CardDescription>
-              Your vote is recorded against your verified identity.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      <main
+        id="main-content"
+        className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"
+      >
+        <div className="max-w-2xl">
+          <button
+            type="button"
+            onClick={() => nav("/vote")}
+            className="
+              mb-10
+              inline-flex
+              items-center
+              text-base
+              font-medium
+              text-[#1d70b8]
+              underline
+              decoration-2
+              underline-offset-2
+              hover:text-[#003078]
+              focus:outline-none
+              focus:ring-4
+              focus:ring-[#ffdd00]
+            "
+          >
+            <span aria-hidden="true" className="mr-2 text-xl leading-none">
+              ‹
+            </span>
+            Back
+          </button>
+
+          <div className="mb-10">
+            <p className="mb-2 text-base text-[#505a5f]">Step 3 of 3</p>
+
+            <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+              Your ballot
+            </h1>
+
+            <div className="mt-4 h-2 max-w-xs overflow-hidden bg-[#f3f2f1]">
+              <div className="h-full bg-[#00703c]" style={{ width: "100%" }} />
+            </div>
+          </div>
+
+          {/* VERIFIED IDENTITY*/}
+
+          <div className="mb-8 border-l-4 border-[#00703c] bg-[#f3f2f1] p-5">
+            <p className="mb-1 text-sm font-bold uppercase tracking-wide text-[#505a5f]">
+              Voting as
+            </p>
+
+            <p className="text-xl font-bold">
+              {identity.firstName} {identity.lastName}
+            </p>
+
+            <p className="mt-1 text-base text-[#505a5f]">
+              Your identity has been verified.
+            </p>
+          </div>
+
+          {submitError && (
+            <div
+              role="alert"
+              className="
+                mb-8
+                border-l-4
+                border-[#d4351c]
+                bg-[#f3f2f1]
+                p-5
+              "
+            >
+              <h2 className="mb-2 text-xl font-bold">There is a problem</h2>
+
+              <p className="text-base leading-7">{submitError}</p>
+            </div>
+          )}
+
+          {/* BALLOT*/}
+          <section aria-labelledby="choose-party-heading">
+            <h2 id="choose-party-heading" className="mb-3 text-2xl font-bold">
+              Choose a party
+            </h2>
+
+            <p className="mb-8 text-lg leading-7 text-[#505a5f]">
+              Select one option. You can review your choice before your vote is
+              submitted.
+            </p>
+
+            {/* Loading */}
             {partiesState.status === "loading" && (
-              <p className="text-muted-foreground">Loading parties…</p>
-            )}
+              <div
+                className="border-l-4 border-[#1d70b8] bg-[#f3f2f1] p-5"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="font-bold">Loading parties…</p>
 
-            {partiesState.status === "error" && (
-              <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
-                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                <div className="space-y-2">
-                  <p className="text-sm text-foreground">
-                    We could not load the list of parties.
-                  </p>
-                  <Button variant="outline" size="sm" onClick={loadParties}>
-                    Try again
-                  </Button>
-                </div>
+                <p className="mt-1 text-base text-[#505a5f]">
+                  Please wait while we load the ballot.
+                </p>
               </div>
             )}
 
-            {partiesState.status === "ready" && partiesState.parties.length === 0 && (
-              <p className="text-muted-foreground">
-                No parties are available to vote for right now.
-              </p>
+            {/* Error */}
+            {partiesState.status === "error" && (
+              <div
+                role="alert"
+                className="
+                  border-l-4
+                  border-[#d4351c]
+                  bg-[#f3f2f1]
+                  p-5
+                "
+              >
+                <h3 className="mb-2 text-xl font-bold">
+                  We could not load the ballot
+                </h3>
+
+                <p className="mb-5 text-base leading-7">
+                  We could not load the list of parties. Try again.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={loadParties}
+                  className="
+                    inline-flex
+                    items-center
+                    bg-white
+                    px-5
+                    py-3
+                    text-base
+                    font-bold
+                    text-[#1d70b8]
+                    underline
+                    decoration-2
+                    underline-offset-2
+                    ring-1
+                    ring-[#b1b4b6]
+                    hover:bg-[#f3f2f1]
+                    focus:outline-none
+                    focus:ring-4
+                    focus:ring-[#ffdd00]
+                  "
+                >
+                  Try again
+                </button>
+              </div>
             )}
+
+            {/* No parties */}
 
             {partiesState.status === "ready" &&
-              partiesState.parties.map((party) => (
-                <label
-                  key={party.id}
-                  htmlFor={`party-${party.id}`}
-                  className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all ${
-                    selectedPartyId === party.id
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                      : "border-border hover:bg-secondary"
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      id={`party-${party.id}`}
-                      name="party"
-                      value={party.id}
-                      checked={selectedPartyId === party.id}
-                      onChange={() => setSelectedPartyId(party.id)}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    <span>
-                      <span className="block font-semibold text-foreground">
-                        {party.partyName}
-                      </span>
-                      <span className="block text-sm text-muted-foreground">
-                        {party.position}
-                      </span>
-                    </span>
-                  </span>
-                  {selectedPartyId === party.id && (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                  )}
-                </label>
-              ))}
+              partiesState.parties.length === 0 && (
+                <div className="border-l-4 border-[#505a5f] bg-[#f3f2f1] p-5">
+                  <p className="font-bold">No parties are available</p>
 
-            {submitError && (
-              <p className="text-sm text-destructive" role="alert">
-                {submitError}
-              </p>
+                  <p className="mt-1 text-base text-[#505a5f]">
+                    There are currently no parties available to vote for.
+                  </p>
+                </div>
+              )}
+
+            {/* Party list */}
+
+            {partiesState.status === "ready" &&
+              partiesState.parties.length > 0 && (
+                <fieldset>
+                  <legend className="sr-only">Select a party</legend>
+
+                  <div className="border-t-2 border-[#0b0c0c]">
+                    {partiesState.parties.map((party) => {
+                      const selected = selectedPartyId === party.id;
+
+                      return (
+                        <label
+                          key={party.id}
+                          htmlFor={`party-${party.id}`}
+                          className={`
+                            relative
+                            flex
+                            cursor-pointer
+                            items-start
+                            gap-4
+                            border-b
+                            border-[#b1b4b6]
+                            px-4
+                            py-5
+                            transition-colors
+                            ${
+                              selected
+                                ? "bg-[#f3f2f1]"
+                                : "bg-white hover:bg-[#f3f2f1]"
+                            }
+                            focus-within:ring-4
+                            focus-within:ring-[#ffdd00]
+                          `}
+                        >
+                          <input
+                            id={`party-${party.id}`}
+                            type="radio"
+                            name="party"
+                            value={party.id}
+                            checked={selected}
+                            onChange={() => setSelectedPartyId(party.id)}
+                            className="
+                              mt-1
+                              h-6
+                              w-6
+                              shrink-0
+                              accent-[#00703c]
+                            "
+                          />
+
+                          <span className="min-w-0">
+                            <span className="block text-lg font-bold">
+                              {party.partyName}
+                            </span>
+
+                            {party.position && (
+                              <span className="mt-1 block text-base leading-6 text-[#505a5f]">
+                                {party.position}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
+
+            {/* SELECTED PARTY SUMMARY */}
+
+            {selectedParty && (
+              <div className="mt-8 border-l-4 border-[#1d70b8] bg-[#f3f2f1] p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-[#505a5f]">
+                  Your selection
+                </p>
+                <p className="mt-1 text-xl font-bold">
+                  {selectedParty.partyName}
+                </p>
+
+                {selectedParty.position && (
+                  <p className="mt-1 text-base text-[#505a5f]">
+                    {selectedParty.position}
+                  </p>
+                )}
+              </div>
             )}
 
-            <Button
-              className="w-full mt-4"
-              size="lg"
-              disabled={
-                !selectedPartyId || busy || partiesState.status !== "ready"
-              }
-              onClick={openConfirm}
-            >
-              Submit vote
-            </Button>
-          </CardContent>
-        </Card>
+            {/* REVIEW BUTTON */}
+            {partiesState.status === "ready" &&
+              partiesState.parties.length > 0 && (
+                <div className="mt-10">
+                  <button
+                    type="button"
+                    disabled={
+                      !selectedPartyId ||
+                      busy ||
+                      partiesState.status !== "ready"
+                    }
+                    onClick={openConfirm}
+                    className="
+                      inline-flex
+                      items-center
+                      justify-center
+                      bg-[#00703c]
+                      px-6
+                      py-3
+                      text-lg
+                      font-bold
+                      text-white
+                      shadow-[0_2px_0_#00401e]
+                      hover:bg-[#005a30]
+                      disabled:cursor-not-allowed
+                      disabled:bg-[#b1b4b6]
+                      disabled:text-[#505a5f]
+                      disabled:shadow-none
+                      focus:outline-none
+                      focus:ring-4
+                      focus:ring-[#ffdd00]
+                    "
+                  >
+                    Review your vote
+                  </button>
+                </div>
+              )}
+          </section>
+        </div>
       </main>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm your vote</AlertDialogTitle>
-            <AlertDialogDescription>
-              You're about to cast your vote for{" "}
-              <span className="font-semibold text-foreground">
+      {/* CONFIRMATION */}
+      {confirmOpen && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-50
+            flex
+            items-center
+            justify-center
+            bg-black/50
+            p-4
+          "
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-vote-heading"
+            className="
+              w-full
+              max-w-xl
+              bg-white
+              p-6
+              shadow-2xl
+              sm:p-8
+            "
+          >
+            <h2 id="confirm-vote-heading" className="mb-5 text-3xl font-bold">
+              Confirm your vote
+            </h2>
+
+            <div className="mb-8 border-l-4 border-[#1d70b8] bg-[#f3f2f1] p-5">
+              <p className="text-base text-[#505a5f]">You are voting for:</p>
+
+              <p className="mt-1 text-2xl font-bold">
                 {selectedParty?.partyName}
-              </span>
-              . This is final and cannot be changed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={cast}>
-              {busy ? "Submitting…" : "Confirm vote"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              </p>
+
+              {selectedParty?.position && (
+                <p className="mt-1 text-base text-[#505a5f]">
+                  {selectedParty.position}
+                </p>
+              )}
+            </div>
+
+            <p className="mb-8 text-lg leading-7">
+              Your vote is final and cannot be changed after it has been
+              submitted.
+            </p>
+
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={cast}
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  bg-[#00703c]
+                  px-6
+                  py-3
+                  text-lg
+                  font-bold
+                  text-white
+                  shadow-[0_2px_0_#00401e]
+                  hover:bg-[#005a30]
+                  disabled:cursor-not-allowed
+                  disabled:bg-[#b1b4b6]
+                  disabled:text-[#505a5f]
+                  disabled:shadow-none
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                {busy ? "Submitting…" : "Confirm and cast vote"}
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmOpen(false)}
+                className="
+                  text-lg
+                  font-bold
+                  text-[#1d70b8]
+                  underline
+                  decoration-2
+                  underline-offset-2
+                  hover:text-[#003078]
+                  disabled:text-[#505a5f]
+                  focus:outline-none
+                  focus:ring-4
+                  focus:ring-[#ffdd00]
+                "
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <GovFooter />
     </div>
   );
 }

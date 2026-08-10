@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { GovHeader } from "@/components/GovHeader";
+import { GovFooter } from "@/components/GovFooter";
 
 export const VOTE_IDENTITY_STORAGE_KEY = "eballot_vote_identity";
 
@@ -202,7 +203,6 @@ export default function Vote() {
   return (
     <div className="min-h-screen bg-white text-[#0b0c0c]">
       <GovHeader />
-
       <main
         id="main-content"
         className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"
@@ -780,63 +780,7 @@ export default function Vote() {
           )}
         </div>
       </main>
-
-      {/* FOOTER */}
-
-      <footer className="mt-16 border-t border-[#b1b4b6] bg-[#f3f2f1]">
-        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 text-sm text-[#505a5f] sm:flex-row sm:items-center sm:justify-between">
-            <div>© E-Ballot UK</div>
-
-            <nav
-              aria-label="Footer navigation"
-              className="flex flex-wrap gap-x-6 gap-y-2"
-            >
-              <a
-                href="#"
-                className="
-                  text-[#1d70b8]
-                  underline
-                  hover:text-[#003078]
-                  focus:outline-none
-                  focus:ring-4
-                  focus:ring-[#ffdd00]
-                "
-              >
-                Help
-              </a>
-
-              <a
-                href="#"
-                className="
-                  text-[#1d70b8]
-                  underline
-                  hover:text-[#003078]
-                  focus:outline-none
-                  focus:ring-4
-                  focus:ring-[#ffdd00]
-                "
-              >
-                Accessibility
-              </a>
-
-              <a
-                href="#"
-                className="
-                  text-[#1d70b8]
-                  underline
-                  hover:text-[#003078]
-                  focus:outline-none
-                  focus:ring-4
-                  focus:ring-[#ffdd00]
-                "
-              >
-                Privacy
-              </a>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      <GovFooter />
     </div>
   );
 }
